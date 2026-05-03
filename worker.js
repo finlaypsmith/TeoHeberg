@@ -358,7 +358,7 @@ async function performAdTask(env, email, storedCookie) {
     log('WARN', `[${email}] 结束后访问主页失败: ${e.message}`);
   }
 
-  // ========== 直接使用积分差估算广告次数（每次广告 +2 积分） ==========
+  // 直接使用积分差估算广告次数（每次广告 +2 积分）
   if (beforePoints && afterPoints) {
     const beforeNum = parsePointsNumber(beforePoints);
     const afterNum = parsePointsNumber(afterPoints);
@@ -380,7 +380,6 @@ async function notifyAdResult(env, email, result) {
   const beforeNum = parsePointsNumber(result.beforePoints);
   const afterNum = parsePointsNumber(result.afterPoints);
 
-  // 致命错误：Cookie 失效
   if (result.error && /会话初始化失败|remember_web.*失效/i.test(result.error)) {
     title = '🚨 Cookie 已失效';
     lines = [
@@ -392,9 +391,7 @@ async function notifyAdResult(env, email, result) {
       '',
       'TeoHeberg Daily Points'
     ];
-  }
-  // 成功：有广告完成或积分增加（积分估算后 adCount 已正确）
-  else if (
+  } else if (
     result.adCount > 0 ||
     (beforeNum !== null && afterNum !== null && afterNum > beforeNum)
   ) {
@@ -408,9 +405,7 @@ async function notifyAdResult(env, email, result) {
       '',
       'TeoHeberg Daily Points'
     ];
-  }
-  // 无积分增长且无广告完成 → 冷却/额度用完
-  else {
+  } else {
     title = '⏳ 冷却中';
     lines = [
       title,
@@ -462,20 +457,38 @@ async function processAccount(env, account) {
   return result;
 }
 
+// ========== 批量处理（分批，每批最多2个账号，以避免子请求超限） ==========
 async function processAllAccounts(env) {
   log('INFO', '========== 开始批量处理广告任务 ==========');
   const accounts = await getAccounts(env);
   if (!accounts.length) return { success: false, message: '无账号' };
+
+  const BATCH_SIZE = 2;
   const results = [];
-  for (const acc of accounts) {
-    results.push(await processAccount(env, acc));
-    await new Promise(r => setTimeout(r, 10000));
+
+  for (let i = 0; i < accounts.length; i += BATCH_SIZE) {
+    const batch = accounts.slice(i, i + BATCH_SIZE);
+    log('INFO', `处理第 ${Math.floor(i / BATCH_SIZE) + 1} 批，共 ${batch.length} 个账号`);
+
+    // 批次内逐个处理，避免并发过高
+    for (const acc of batch) {
+      results.push(await processAccount(env, acc));
+      // 账号间短暂休息，减缓子请求累积
+      await new Promise(r => setTimeout(r, 5000));
+    }
+
+    // 如果不是最后一批，等待15秒再处理下一批，确保子请求计数器重置
+    if (i + BATCH_SIZE < accounts.length) {
+      log('INFO', '等待 15 秒后处理下一批...');
+      await new Promise(r => setTimeout(r, 15000));
+    }
   }
+
   log('INFO', '========== 批量处理完成 ==========');
   return { success: true, totalAds: results.reduce((s, r) => s + r.adCount, 0), results };
 }
 
-// ========== 前端页面（保持不变） ==========
+// ========== 前端页面 ==========
 function getHtmlPage() {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
