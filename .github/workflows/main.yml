@@ -31,7 +31,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq xvfb ffmpeg mesa-utils libgl1-mesa-glx libgl1-mesa-dri
 
-          pip install --quiet playwright requests SpeechRecognition pydub
+          pip install --quiet playwright 'requests[socks]' SpeechRecognition pydub
           python -m playwright install --with-deps chromium
 
       - name: 🌐 设置sing-box代理转发
