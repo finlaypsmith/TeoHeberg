@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# 脚本运行产物（截图）
+scripts/screenshots/
+
+# 调试产物
+.tmp/

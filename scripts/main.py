@@ -25,6 +25,12 @@ log = logging.getLogger(__name__)
 ACCOUNTS_RAW = os.environ.get("TEOHEBERG", "")
 TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "")
 TG_CHAT_ID = os.environ.get("TG_CHAT_ID", "")
+
+# ── 代理（IS_PROXY=true 时启用，PROXY_SERVER 指定代理地址）──
+IS_PROXY = os.environ.get("IS_PROXY", "false").lower() == "true"
+PROXY_SERVER = os.environ.get("PROXY_SERVER", "").strip() or "http://127.0.0.1:1080"
+PROXIES = {"http": PROXY_SERVER, "https": PROXY_SERVER} if IS_PROXY else None
+
 LOGIN_URL = "https://manager.teoheberg.fr/login"
 SERVERS_URL = "https://manager.teoheberg.fr/servers"
 HOME_URL = "https://manager.teoheberg.fr/home"
@@ -86,6 +92,7 @@ def send_telegram_media_group(photo_paths: list[str], caption: str):
                     f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendPhoto",
                     data={"chat_id": TG_CHAT_ID, "caption": caption},
                     files={"photo": f},
+                    proxies=PROXIES,
                     timeout=30,
                 )
             log.info("✅ TG 发送成功" if resp.ok else f"⚠️ TG 发送失败: {resp.status_code}")
@@ -104,6 +111,7 @@ def send_telegram_media_group(photo_paths: list[str], caption: str):
             f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMediaGroup",
             data={"chat_id": TG_CHAT_ID, "media": json.dumps(media)},
             files=files,
+            proxies=PROXIES,
             timeout=30,
         )
         for f in files.values():
@@ -119,6 +127,7 @@ def send_telegram_message(message: str):
         resp = req.post(
             f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
             json={"chat_id": TG_CHAT_ID, "text": message},
+            proxies=PROXIES,
             timeout=30,
         )
         log.info("✅ TG 文本发送成功" if resp.ok else f"⚠️ TG 文本发送失败: {resp.status_code}")
@@ -317,7 +326,7 @@ def download_audio(url):
         urls.append(url.replace("www.google.com", "recaptcha.net"))
     for u in urls:
         try:
-            r = req.get(u, headers=headers, timeout=30)
+            r = req.get(u, headers=headers, proxies=PROXIES, timeout=30)
             r.raise_for_status()
             if len(r.content) < 1000:
                 continue
@@ -769,6 +778,7 @@ def run():
         context = p.chromium.launch_persistent_context(
             profile,
             headless=False,
+            proxy={"server": PROXY_SERVER} if IS_PROXY else None,
             args=[
                 "--no-sandbox",
                 "--disable-blink-features=AutomationControlled",
